@@ -24,37 +24,47 @@ Two modes are available: an interactive terminal REPL and a system-wide backgrou
 
 ---
 
-## Setup
+## Quick start
 
 ```bash
-bash setup.sh
+git clone https://github.com/elomariAchraf/tinyblabla.git
+cd tinyblabla
+make setup   # create venv and install dependencies (once)
+make run     # start the system-wide daemon
 ```
 
-That's it. The script creates the virtual environment and installs all dependencies. The model downloads automatically from HuggingFace on first run.
+The model downloads automatically from HuggingFace on first run.
 
-### macOS permissions
+---
+
+## macOS permissions
 
 The daemon listens to global keyboard events and controls the keyboard to select/paste text. Grant these two permissions to your Terminal app:
 
-- **System Settings → Privacy & Security → Accessibility** — add Terminal (required for global hotkey and keyboard control)
-- **System Settings → Privacy & Security → Automation** — allow Terminal to control other apps (required for `osascript` focus switching)
+- **System Settings → Privacy & Security → Accessibility** — required for the global hotkey and keyboard control
+- **System Settings → Privacy & Security → Automation** — required for switching focus back to the original app
+
+---
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `make setup` | Create the virtual environment and install all dependencies |
+| `make run` | Start the system-wide reformulation daemon |
+| `make repl` | Start the interactive terminal REPL |
 
 ---
 
 ## Usage
 
-```bash
-make run   # start the system-wide daemon
-make repl  # start the interactive terminal REPL
-```
-
 ### Daemon (system-wide)
 
 1. Run `make run` — the model loads and the daemon listens in the background
-2. In **any app**, place your cursor at the end of a sentence
+2. In **any app**, place your cursor anywhere in a sentence
 3. Press **Ctrl+Shift+Space**
 4. Wait a few seconds while the model generates suggestions
-5. A native macOS popup appears — click a suggestion to replace your sentence in place
+5. A native macOS popup appears — click a suggestion to replace your original sentence in place
 
 Type `exit` and press Enter in the terminal to stop the daemon.
 
@@ -87,6 +97,7 @@ Reformulated:
 | `start.sh` | Activates the venv and starts the daemon |
 | `setup.sh` | One-time setup: creates venv and installs dependencies |
 | `requirements.txt` | Python dependencies |
+| `Makefile` | Shortcuts: `setup`, `run`, `repl` |
 
 ---
 
