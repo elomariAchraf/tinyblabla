@@ -4,3 +4,5 @@ accelerate
 safetensors
 tokenizers
 pynput
+sentencepiece
+protobuf
