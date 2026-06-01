@@ -44,6 +44,7 @@ def reformulate(sentence):
         "role": "user",
         "content": (
             "Rewrite with better grammar and style. "
+            "Respond in the same language as the sentence. "
             "Output exactly 3 numbered reformulations, nothing else.\n"
             f"Sentence: {sentence}"
         ),
