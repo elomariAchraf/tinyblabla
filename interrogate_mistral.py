@@ -35,6 +35,7 @@ def reformulate(sentence, max_new_tokens=150):
         temperature=0.7,
         do_sample=True,
         top_p=0.9,
+        pad_token_id=tokenizer.eos_token_id,
     )
 
     input_len = inputs["input_ids"].shape[1]
