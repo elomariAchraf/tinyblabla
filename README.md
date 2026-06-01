@@ -27,12 +27,10 @@ Two modes are available: an interactive terminal REPL and a system-wide backgrou
 ## Setup
 
 ```bash
-python3.9 -m venv venv
-source venv/bin/activate
-pip install torch transformers accelerate safetensors tokenizers pynput
+bash setup.sh
 ```
 
-The model is downloaded automatically from HuggingFace on first run.
+That's it. The script creates the virtual environment and installs all dependencies. The model downloads automatically from HuggingFace on first run.
 
 ### macOS permissions
 
@@ -45,45 +43,37 @@ The daemon listens to global keyboard events and controls the keyboard to select
 
 ## Usage
 
+```bash
+make run   # start the system-wide daemon
+make repl  # start the interactive terminal REPL
+```
+
+### Daemon (system-wide)
+
+1. Run `make run` — the model loads and the daemon listens in the background
+2. In **any app**, place your cursor at the end of a sentence
+3. Press **Ctrl+Shift+Space**
+4. Wait a few seconds while the model generates suggestions
+5. A native macOS popup appears — click a suggestion to replace your sentence in place
+
+Type `exit` and press Enter in the terminal to stop the daemon.
+
 ### Interactive REPL
 
 ```bash
-source venv/bin/activate
-python interrogate_mistral.py
+make repl
 ```
 
-Type a sentence ending with a `.` and press Enter. The model returns several reformulated versions. Type `exit`, `quit`, or `bye` to stop.
+Type any sentence and get reformulated versions instantly. Type `exit` to quit.
 
 ```
-Vous : This is a bad writed sentence.
+You: This is a bad writed sentence.
 
-Corrigé :
+Reformulated:
 1. This is a poorly written sentence.
 2. This sentence contains grammatical errors.
-...
+3. There are mistakes in this sentence.
 ```
-
-### System-wide daemon
-
-```bash
-bash start.sh
-```
-
-Or make it executable once and run directly:
-
-```bash
-chmod +x start.sh
-./start.sh
-```
-
-1. The daemon loads the model and listens in the background
-2. In **any app**, place your cursor at the end of a sentence that ends with `.`
-3. Press **Ctrl+Shift+Space**
-4. Wait ~20 seconds while the model generates suggestions
-5. A native macOS popup appears — click a suggestion or use keyboard navigation
-6. The chosen text **replaces** your original sentence in place
-
-To stop the daemon, type `exit` and press Enter in the terminal where it is running.
 
 ---
 
@@ -95,6 +85,8 @@ To stop the daemon, type `exit` and press Enter in the terminal where it is runn
 | `reformulate_daemon.py` | Background hotkey daemon |
 | `popup_worker.py` | Native macOS suggestion picker (spawned by the daemon) |
 | `start.sh` | Activates the venv and starts the daemon |
+| `setup.sh` | One-time setup: creates venv and installs dependencies |
+| `requirements.txt` | Python dependencies |
 
 ---
 
