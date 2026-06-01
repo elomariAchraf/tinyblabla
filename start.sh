@@ -1,4 +1,4 @@
 #!/bin/bash
 cd "$(dirname "$0")"
-source tinyllama_env/bin/activate
+source venv/bin/activate
 python reformulate_daemon.py

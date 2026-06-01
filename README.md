@@ -27,8 +27,8 @@ Two modes are available: an interactive terminal REPL and a system-wide backgrou
 ## Setup
 
 ```bash
-python3.9 -m venv tinyllama_env
-source tinyllama_env/bin/activate
+python3.9 -m venv venv
+source venv/bin/activate
 pip install torch transformers accelerate safetensors tokenizers pynput
 ```
 
@@ -48,7 +48,7 @@ The daemon listens to global keyboard events and controls the keyboard to select
 ### Interactive REPL
 
 ```bash
-source tinyllama_env/bin/activate
+source venv/bin/activate
 python interrogate_mistral.py
 ```
 

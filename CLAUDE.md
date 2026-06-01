@@ -9,7 +9,7 @@ A local AI writing assistant powered by [Mistral-7B-Instruct-v0.3](https://huggi
 ## Environment Setup
 
 ```bash
-source tinyllama_env/bin/activate
+source venv/bin/activate
 ```
 
 The virtualenv uses Python 3.9 and includes: `torch`, `transformers`, `accelerate`, `safetensors`, `tokenizers`, `pynput`.
