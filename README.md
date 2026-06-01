@@ -10,7 +10,7 @@ Two modes are available: a system-wide background daemon and an interactive term
 
 ## Features
 
-- **Sentence reformulation** — rewrites any selected text with better grammar and style, returning 3 suggestions
+- **Sentence reformulation** — rewrites any selected text with better grammar and style, returning 3 suggestions in the same language as the input
 - **System-wide daemon** — works in any app (browser, editor, notes…) via a global keyboard shortcut
 - **Native popup** — choose a suggestion from a macOS picker dialog, it replaces your original text in place
 - **Interactive REPL** — type sentences directly in the terminal and get reformulations instantly
@@ -102,7 +102,7 @@ The daemon listens to global keyboard events and controls the keyboard to select
 1. Run `make run-mlx` — the model loads and the daemon listens in the background
 2. In **any app**, place your cursor anywhere in a sentence
 3. Press **Ctrl+Shift+Space**
-4. A native macOS popup appears with 3 suggestions — click one to replace your original text in place
+4. A native macOS popup appears with 3 suggestions in your language — click one to replace your original text in place
 
 Type `exit` and press Enter in the terminal to stop the daemon.
 

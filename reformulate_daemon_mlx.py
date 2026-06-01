@@ -45,7 +45,7 @@ def reformulate(sentence):
         "content": (
             "Rewrite with better grammar and style. "
             "Respond in the same language as the sentence. "
-            "Output exactly 3 numbered reformulations, nothing else.\n"
+            "Output exactly 5 numbered reformulations, nothing else.\n"
             f"Sentence: {sentence}"
         ),
     }]
