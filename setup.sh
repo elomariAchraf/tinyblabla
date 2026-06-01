@@ -3,7 +3,7 @@ set -e
 cd "$(dirname "$0")"
 
 echo "Creating virtual environment..."
-python -m venv venv
+python3 -m venv venv
 
 echo "Installing dependencies..."
 venv/bin/pip install --upgrade pip -q

@@ -19,7 +19,7 @@ Two modes are available: an interactive terminal REPL and a system-wide backgrou
 ## Requirements
 
 - macOS
-- Python 3.9
+- Python 3.9+
 - ~14 GB of free disk space (model weights)
 
 ---
