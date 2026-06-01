@@ -9,4 +9,4 @@ run:
 	bash start.sh
 
 repl:
-	source venv/bin/activate && python interrogate_mistral.py
+	bash repl.sh

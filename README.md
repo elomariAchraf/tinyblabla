@@ -95,6 +95,7 @@ Reformulated:
 | `reformulate_daemon.py` | Background hotkey daemon |
 | `popup_worker.py` | Native macOS suggestion picker (spawned by the daemon) |
 | `start.sh` | Activates the venv and starts the daemon |
+| `repl.sh` | Activates the venv and starts the REPL |
 | `setup.sh` | One-time setup: creates venv and installs dependencies |
 | `requirements.txt` | Python dependencies |
 | `Makefile` | Shortcuts: `setup`, `run`, `repl` |
