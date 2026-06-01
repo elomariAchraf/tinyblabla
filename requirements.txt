@@ -6,3 +6,4 @@ tokenizers
 pynput
 sentencepiece
 protobuf
+mlx-lm
