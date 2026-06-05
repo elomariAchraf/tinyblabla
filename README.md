@@ -2,7 +2,7 @@
 
 Local AI writing assistant running entirely on your Mac — no internet required after the first model download.
 
-Two backends are available: a fast **MLX** daemon (recommended) powered by Phi-3 Mini 4-bit, and a standard **PyTorch/MPS** daemon powered by Mistral-7B-Instruct-v0.3.
+Two backends are available: a fast **MLX** daemon (recommended) powered by Mistral-7B 4-bit, and a standard **PyTorch/MPS** daemon powered by Mistral-7B full-precision.
 
 Two modes are available: a system-wide background daemon and an interactive terminal REPL.
 
@@ -10,7 +10,8 @@ Two modes are available: a system-wide background daemon and an interactive term
 
 ## Features
 
-- **Sentence reformulation** — rewrites any selected text with better grammar and style, returning 3 suggestions in the same language as the input
+- **Sentence reformulation** — rewrites any selected text with better grammar and style, returning 5 suggestions
+- **Multilingual** — detects English and French automatically and responds in the same language
 - **System-wide daemon** — works in any app (browser, editor, notes…) via a global keyboard shortcut
 - **Native popup** — choose a suggestion from a macOS picker dialog, it replaces your original text in place
 - **Interactive REPL** — type sentences directly in the terminal and get reformulations instantly
@@ -23,7 +24,7 @@ Two modes are available: a system-wide background daemon and an interactive term
 
 - macOS 13.5+ (Apple Silicon)
 - Python 3.9+
-- Disk space: ~2.3 GB (MLX / Phi-3 Mini) or ~14 GB (PyTorch / Mistral 7B)
+- Disk space: ~3.8 GB (MLX / Mistral 7B 4-bit) or ~14 GB (PyTorch / Mistral 7B full)
 
 ---
 
@@ -45,10 +46,10 @@ The model downloads automatically from HuggingFace on first run.
 
 ### MLX (recommended)
 
-Uses Apple's [MLX](https://github.com/ml-explore/mlx) framework with `mlx-community/Phi-3-mini-4k-instruct-4bit`.
+Uses Apple's [MLX](https://github.com/ml-explore/mlx) framework with `mlx-community/Mistral-7B-Instruct-v0.3-4bit`.
 
 - **2–4× faster** than the PyTorch daemon
-- **~2.3 GB** model download (vs ~14 GB for Mistral 7B)
+- **~3.8 GB** model download (vs ~14 GB for the full-precision daemon)
 - Optimized natively for Apple Silicon
 
 ```bash
@@ -60,10 +61,8 @@ make run-mlx     # start the MLX daemon
 
 Uses `transformers` + PyTorch MPS with `mistralai/Mistral-7B-Instruct-v0.3`.
 
-Includes these performance optimizations over the original:
+Includes these performance optimizations:
 - `torch.compile(mode="reduce-overhead")` applied at startup with a warmup inference
-- `max_new_tokens` reduced from 120 → 80
-- Shorter prompt to reduce prefill time
 - `@torch.inference_mode()` on the generation function
 
 ```bash
@@ -87,8 +86,8 @@ The daemon listens to global keyboard events and controls the keyboard to select
 |---|---|
 | `make setup` | Create the virtual environment and install base dependencies |
 | `make setup-mlx` | Install `mlx-lm` for the fast MLX backend |
-| `make run-mlx` | Start the fast MLX daemon (Phi-3 Mini, recommended) |
-| `make run` | Start the PyTorch/MPS daemon (Mistral 7B) |
+| `make run-mlx` | Start the fast MLX daemon (Mistral 7B 4-bit, recommended) |
+| `make run` | Start the PyTorch/MPS daemon (Mistral 7B full-precision) |
 | `make repl` | Start the interactive terminal REPL |
 
 > **Note:** `make repl` must be run directly in your own terminal — it requires an interactive session.
@@ -102,7 +101,7 @@ The daemon listens to global keyboard events and controls the keyboard to select
 1. Run `make run-mlx` — the model loads and the daemon listens in the background
 2. In **any app**, place your cursor anywhere in a sentence
 3. Press **Ctrl+Shift+Space**
-4. A native macOS popup appears with 3 suggestions in your language — click one to replace your original text in place
+4. A native macOS popup appears with 5 suggestions in your language — click one to replace your original text in place
 
 Type `exit` and press Enter in the terminal to stop the daemon.
 
@@ -116,7 +115,22 @@ You: This is a bad writed sentence.
 Reformulated:
 1. This is a poorly written sentence.
 2. This sentence contains grammatical errors.
-3. There are mistakes in this sentence.
+3. There are several mistakes in this sentence.
+4. The sentence is grammatically incorrect.
+5. This sentence was written incorrectly.
+```
+
+French is supported too:
+
+```
+You: Je veux que tu viens avec moi demain.
+
+Reformulated:
+1. Je voudrais que tu viennes avec moi demain.
+2. J'aimerais que tu m'accompagnes demain.
+3. Pourrais-tu venir avec moi demain ?
+4. Je souhaite ta présence avec moi demain.
+5. Est-ce que tu peux venir avec moi demain ?
 ```
 
 Type `exit` to quit.
@@ -144,8 +158,8 @@ Type `exit` to quit.
 
 | File | Description |
 |---|---|
-| `reformulate_daemon_mlx.py` | Fast MLX daemon (Phi-3 Mini 4-bit, recommended) |
-| `reformulate_daemon.py` | PyTorch/MPS daemon (Mistral 7B) |
+| `reformulate_daemon_mlx.py` | Fast MLX daemon (Mistral 7B 4-bit, recommended) |
+| `reformulate_daemon.py` | PyTorch/MPS daemon (Mistral 7B full-precision) |
 | `interrogate_mistral.py` | Interactive REPL |
 | `popup_worker.py` | Native macOS suggestion picker (spawned by the daemon) |
 | `start_mlx.sh` | Activates the venv and starts the MLX daemon |
@@ -165,4 +179,4 @@ The daemon writes a log file at `reformulate.log` in the project directory. To f
 tail -f reformulate.log
 ```
 
-Log levels: `INFO` for main events, `DEBUG` for raw model output, `WARNING` for skipped inputs or busy state, `ERROR` for unexpected failures.
+Log levels: `INFO` for main events, `DEBUG` for raw model output and detected language, `WARNING` for skipped inputs or busy state, `ERROR` for unexpected failures.

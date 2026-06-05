@@ -1,10 +1,10 @@
 """
 MLX-accelerated reformulation daemon.
-Uses Apple MLX backend with a 4-bit quantized Phi-3 Mini model for ~3-5x
-faster inference compared to the PyTorch/MPS-based daemon.
+Uses Apple MLX backend with a 4-bit quantized Mistral-7B model for fast
+inference with strong multilingual support (English, French, and more).
 
 Requirements: pip install mlx-lm
-Model: ~2.3 GB download on first run (mlx-community/Phi-3-mini-4k-instruct-4bit)
+Model: ~3.8 GB download on first run (mlx-community/Mistral-7B-Instruct-v0.3-4bit)
 """
 import json
 import logging
@@ -16,7 +16,7 @@ from mlx_lm import load, generate as mlx_generate
 from pynput import keyboard
 
 HOTKEY = "<ctrl>+<shift>+<space>"
-MODEL_NAME = "mlx-community/Phi-3-mini-4k-instruct-4bit"
+MODEL_NAME = "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
 LOG_FILE = "reformulate.log"
 
 logging.basicConfig(
@@ -37,14 +37,32 @@ log.info("Model loaded. Hotkey active: Ctrl+Shift+Space")
 kb = keyboard.Controller()
 _busy = threading.Lock()
 
+_FRENCH_WORDS = frozenset([
+    "je", "tu", "il", "elle", "nous", "vous", "ils", "elles",
+    "le", "la", "les", "un", "une", "des", "du", "de", "et",
+    "est", "sont", "que", "qui", "dans", "sur", "avec", "pour",
+    "par", "mais", "ou", "donc", "ni", "car", "pas", "ne", "se",
+])
+
+def detect_language(text):
+    import re
+    if re.search(r'[çœàâùûîïêëôéèæ]', text.lower()):
+        return "French"
+    words = set(re.findall(r'\b\w+\b', text.lower()))
+    if len(words & _FRENCH_WORDS) >= 2:
+        return "French"
+    return "English"
+
 
 def reformulate(sentence):
     log.debug("Reformulating: %r", sentence)
+    lang = detect_language(sentence)
+    log.debug("Detected language: %s", lang)
     messages = [{
         "role": "user",
         "content": (
-            "Rewrite with better grammar and style. "
-            "Respond in the same language as the sentence. "
+            f"Rewrite the following {lang} sentence with better grammar and style. "
+            f"Your response MUST be entirely in {lang}, do not translate. "
             "Output exactly 5 numbered reformulations, nothing else.\n"
             f"Sentence: {sentence}"
         ),
@@ -52,7 +70,7 @@ def reformulate(sentence):
     prompt = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
-    raw = mlx_generate(model, tokenizer, prompt=prompt, max_tokens=80, verbose=False)
+    raw = mlx_generate(model, tokenizer, prompt=prompt, max_tokens=300, verbose=False)
     log.debug("Raw model output: %r", raw)
     suggestions = []
     for line in raw.splitlines():
