@@ -199,7 +199,18 @@ def handle_hotkey():
             log.warning("Nothing selected and current line is empty — aborting")
             return
 
-        suggestions = reformulate(sentence)
+        # Pop a loading spinner instantly so the user gets feedback while the
+        # model generates (which takes a couple of seconds).
+        workdir = __file__[:__file__.rfind("/")]
+        loader = subprocess.Popen([sys.executable, "loader_worker.py"], cwd=workdir)
+        try:
+            suggestions = reformulate(sentence)
+        finally:
+            loader.terminate()
+            try:
+                loader.wait(timeout=2)
+            except Exception:
+                loader.kill()
         if not suggestions:
             log.warning("No suggestions returned by the model")
             return
@@ -209,7 +220,7 @@ def handle_hotkey():
             [sys.executable, "popup_worker.py", json.dumps(suggestions)],
             capture_output=True,
             text=True,
-            cwd=__file__[:__file__.rfind("/")],
+            cwd=workdir,
         )
         if result.stderr.strip():
             log.error("popup_worker stderr:\n%s", result.stderr.strip())
