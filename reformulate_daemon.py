@@ -113,15 +113,17 @@ def reformulate(sentence, max_new_tokens=600):
     }]
     inputs = tokenizer.apply_chat_template(messages, return_tensors="pt", return_dict=True)
     inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
+    start = time.perf_counter()
     outputs = model.generate(
         **inputs, max_new_tokens=max_new_tokens, temperature=0.7, do_sample=True, top_p=0.9,
         pad_token_id=tokenizer.eos_token_id,
     )
     input_len = inputs["input_ids"].shape[1]
     raw = tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True).strip()
+    elapsed = time.perf_counter() - start
     log.debug("Raw model output: %r", raw)
     result = parse_suggestions(raw)
-    log.info("%d suggestion(s) generated", len(result))
+    log.info("%d suggestion(s) generated in %.2fs", len(result), elapsed)
     return result
 
 
