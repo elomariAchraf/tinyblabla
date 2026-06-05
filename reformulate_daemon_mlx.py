@@ -106,10 +106,12 @@ def reformulate(sentence):
     prompt = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
+    start = time.perf_counter()
     raw = mlx_generate(model, tokenizer, prompt=prompt, max_tokens=600, verbose=False)
+    elapsed = time.perf_counter() - start
     log.debug("Raw model output: %r", raw)
     result = parse_suggestions(raw)
-    log.info("%d suggestion(s) generated", len(result))
+    log.info("%d suggestion(s) generated in %.2fs", len(result), elapsed)
     return result
 
 
