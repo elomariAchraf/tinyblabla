@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import subprocess
 import sys
 import time
@@ -63,18 +64,51 @@ def detect_language(text):
     return "English"
 
 
+_NUM_RE = re.compile(r"^\s*(\d{1,2})[.)]\s+(.*)$")
+
+
+def parse_suggestions(raw):
+    """Extract numbered reformulations from raw model output.
+
+    Joins wrapped continuation lines into a single suggestion and drops any
+    preamble or trailing commentary that falls outside the numbered list.
+    """
+    suggestions = []
+    current = None
+    for line in raw.splitlines():
+        m = _NUM_RE.match(line)
+        if m:
+            if current is not None:
+                suggestions.append(current.strip())
+            current = m.group(2)
+        elif current is not None:
+            if line.strip() == "":
+                # A blank line ends the current item; trailing commentary that
+                # follows it (and isn't numbered) is ignored.
+                suggestions.append(current.strip())
+                current = None
+            else:
+                # Continuation of a soft-wrapped suggestion line.
+                current += " " + line.strip()
+    if current is not None:
+        suggestions.append(current.strip())
+    return [s for s in suggestions if s][:5]
+
+
 @torch.inference_mode()
-def reformulate(sentence, max_new_tokens=300):
+def reformulate(sentence, max_new_tokens=600):
     log.debug("Reformulating: %r", sentence)
     lang = detect_language(sentence)
     log.debug("Detected language: %s", lang)
     messages = [{
         "role": "user",
         "content": (
-            f"Rewrite the following {lang} sentence with better grammar and style. "
-            f"Your response MUST be entirely in {lang}, do not translate. "
-            "Output exactly 5 numbered reformulations, nothing else.\n"
-            f"Sentence: {sentence}"
+            f"Rewrite the following {lang} text with better grammar and style, "
+            f"keeping its original meaning. "
+            f"Your response MUST be entirely in {lang}; do not translate. "
+            "Output ONLY 5 numbered reformulations (1. through 5.), each on its "
+            "own single line. Do not add any preamble, explanation, or commentary.\n\n"
+            f"Text:\n{sentence}"
         ),
     }]
     inputs = tokenizer.apply_chat_template(messages, return_tensors="pt", return_dict=True)
@@ -86,19 +120,7 @@ def reformulate(sentence, max_new_tokens=300):
     input_len = inputs["input_ids"].shape[1]
     raw = tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True).strip()
     log.debug("Raw model output: %r", raw)
-    suggestions = []
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        # Strip leading numbering "1. " or "1) "
-        if len(line) > 2 and line[0].isdigit() and line[1] in ".)" and line[2:3] == " ":
-            suggestions.append(line[3:].strip())
-        elif len(line) > 3 and line[:2].isdigit() and line[2] in ".)" and line[3:4] == " ":
-            suggestions.append(line[4:].strip())
-        else:
-            suggestions.append(line)
-    result = [s for s in suggestions if s]
+    result = parse_suggestions(raw)
     log.info("%d suggestion(s) generated", len(result))
     return result
 
@@ -133,7 +155,17 @@ def activate_app(name):
     )
     time.sleep(0.15)
 
-def select_sentence():
+# Sentinel placed on the clipboard to detect whether the user already has an
+# active text selection: Cmd+C overwrites it only if something was selected.
+_NO_SELECTION = "\x00__tinyblabla_no_selection__\x00"
+
+def copy_selection():
+    with kb.pressed(keyboard.Key.cmd):
+        kb.press("c")
+        kb.release("c")
+    time.sleep(0.1)
+
+def select_line():
     with kb.pressed(keyboard.Key.cmd):
         with kb.pressed(keyboard.Key.shift):
             kb.press(keyboard.Key.left)
@@ -141,19 +173,31 @@ def select_sentence():
     time.sleep(0.08)
 
 def grab_sentence():
-    log.debug("Selecting and copying current sentence")
-    select_sentence()
-    with kb.pressed(keyboard.Key.cmd):
-        kb.press("c")
-        kb.release("c")
-    time.sleep(0.08)
-    return clipboard_read().strip()
+    """Grab the user's current selection (any length, multi-line included).
+
+    If nothing is selected, fall back to selecting the current line. In both
+    cases the selection stays active so the chosen suggestion can be pasted
+    straight over it later.
+    """
+    clipboard_write(_NO_SELECTION)
+    time.sleep(0.05)
+    copy_selection()
+    grabbed = clipboard_read()
+    if grabbed == _NO_SELECTION or grabbed == "":
+        log.debug("No selection detected; selecting current line")
+        select_line()
+        copy_selection()
+        grabbed = clipboard_read()
+    else:
+        log.debug("Using existing selection (%d chars)", len(grabbed))
+    return grabbed.strip()
 
 
 def handle_hotkey():
     if not _busy.acquire(blocking=False):
         log.warning("Already processing, hotkey ignored")
         return
+    original_clipboard = clipboard_read()
     try:
         log.info("Hotkey triggered — grabbing sentence")
         source_app = get_frontmost_app()
@@ -161,6 +205,9 @@ def handle_hotkey():
 
         sentence = grab_sentence()
         log.debug("Sentence grabbed: %r", sentence)
+        if not sentence:
+            log.warning("Nothing selected and current line is empty — aborting")
+            return
 
         suggestions = reformulate(sentence)
         if not suggestions:
@@ -179,14 +226,17 @@ def handle_hotkey():
         log.debug("popup_worker returncode: %d", result.returncode)
         chosen = result.stdout.strip()
         if chosen:
+            # The grabbed block is still selected in the source app, so a single
+            # paste replaces the whole selection — multi-line included.
             activate_app(source_app)
-            select_sentence()
             paste_text(chosen)
         else:
             log.info("Popup closed without selection")
     except Exception:
         log.exception("Unexpected error in handle_hotkey")
     finally:
+        time.sleep(0.2)
+        clipboard_write(original_clipboard)
         _busy.release()
 
 
