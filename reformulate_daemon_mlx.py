@@ -1,10 +1,10 @@
 """
 MLX-accelerated reformulation daemon.
-Uses Apple MLX backend with a 4-bit quantized Mistral-7B model for fast
+Uses Apple MLX backend with a 4-bit quantized Qwen3-4B-Instruct model for fast
 inference with strong multilingual support (English, French, and more).
 
 Requirements: pip install mlx-lm
-Model: ~3.8 GB download on first run (mlx-community/Mistral-7B-Instruct-v0.3-4bit)
+Model: ~2.3 GB download on first run (mlx-community/Qwen3-4B-Instruct-2507-4bit)
 """
 import json
 import logging
@@ -17,7 +17,7 @@ from mlx_lm import load, generate as mlx_generate
 from pynput import keyboard
 
 HOTKEY = "<ctrl>+<shift>+<space>"
-MODEL_NAME = "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
+MODEL_NAME = "mlx-community/Qwen3-4B-Instruct-2507-4bit"
 LOG_FILE = "reformulate.log"
 
 logging.basicConfig(
