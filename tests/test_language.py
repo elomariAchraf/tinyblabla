@@ -1,4 +1,3 @@
-import pytest
 from tinyblabla.language import detect_language
 
 

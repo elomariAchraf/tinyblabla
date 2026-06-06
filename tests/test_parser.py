@@ -1,4 +1,3 @@
-import pytest
 from tinyblabla.parser import parse_suggestions, clean_segment
 
 

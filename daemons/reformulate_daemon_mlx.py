@@ -6,10 +6,8 @@ inference with strong multilingual support (English, French, and more).
 Requirements: pip install mlx-lm
 Model: ~3.8 GB download on first run (mlx-community/Mistral-7B-Instruct-v0.3-4bit)
 """
-import json
 import logging
 import pathlib
-import re
 import subprocess
 import sys
 import time

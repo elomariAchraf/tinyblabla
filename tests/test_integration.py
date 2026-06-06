@@ -1,5 +1,4 @@
 """Integration tests: multiple components working together on realistic inputs."""
-import pytest
 from tinyblabla.language import detect_language
 from tinyblabla.parser import parse_suggestions, stream_parse
 
