@@ -32,6 +32,8 @@ from AppKit import (
     NSProgressIndicatorStyleSpinning,
     NSApplicationActivationPolicyRegular,
     NSBezelStyleRounded,
+    NSEvent,
+    NSScreen,
 )
 
 DONE = "__DONE__"
@@ -131,6 +133,33 @@ def _stdin_reader():
     _q.put(DONE)
 
 
+def _position_away_from_cursor(win):
+    """Place the window in the opposite vertical half of the screen from the
+    mouse cursor (which is at the text the user just selected), so the popup
+    doesn't cover the selection."""
+    mouse = NSEvent.mouseLocation()
+    screen = None
+    for s in NSScreen.screens():
+        f = s.frame()
+        if (f.origin.x <= mouse.x <= f.origin.x + f.size.width
+                and f.origin.y <= mouse.y <= f.origin.y + f.size.height):
+            screen = s
+            break
+    if screen is None:
+        screen = NSScreen.mainScreen()
+    vis = screen.visibleFrame()
+    fw = win.frame().size.width
+    fh = win.frame().size.height
+    margin = 40.0
+    x = vis.origin.x + (vis.size.width - fw) / 2.0
+    mid = vis.origin.y + vis.size.height / 2.0
+    if mouse.y >= mid:
+        y = vis.origin.y + margin                          # cursor high -> popup low
+    else:
+        y = vis.origin.y + vis.size.height - fh - margin   # cursor low -> popup high
+    win.setFrameOrigin_((x, y))
+
+
 def main():
     global TABLE, SPINNER, LABEL
     app = NSApplication.sharedApplication()
@@ -143,7 +172,7 @@ def main():
         False,
     )
     win.setTitle_("Reformulations")
-    win.center()
+    _position_away_from_cursor(win)
     content = win.contentView()
 
     SPINNER = NSProgressIndicator.alloc().initWithFrame_(NSMakeRect(16, 350, 18, 18))
