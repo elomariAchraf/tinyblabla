@@ -49,10 +49,9 @@ def _build_prompt(sentence):
     messages = [{
         "role": "user",
         "content": (
-            f"Rewrite the {lang} text below with better grammar and style. "
-            "Give 5 alternative versions. Each version must be a COMPLETE rewrite "
-            "of the ENTIRE text, preserving every sentence and all information — "
-            "do not drop or summarize any part. "
+            f"Correct all grammar, syntax, tense, and logic errors in the {lang} text below. "
+            "Infer the most likely intended meaning and produce 5 natural, correct alternative "
+            "versions. Each version must be a COMPLETE rewrite of the ENTIRE text. "
             f"Your response MUST be entirely in {lang}; do not translate. "
             "Output ONLY the 5 versions as a numbered list (1. through 5.), one "
             "per line. Do not add any preamble, explanation, or commentary.\n\n"
