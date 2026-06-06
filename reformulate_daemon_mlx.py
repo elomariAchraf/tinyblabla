@@ -210,7 +210,21 @@ def handle_hotkey():
         log.warning("Already processing, hotkey ignored")
         return
     original_clipboard = clipboard_read()
+    workdir = __file__[:__file__.rfind("/")]
+    popup = None
     try:
+        # Launch the popup FIRST so its startup (~0.14s) overlaps the focus and
+        # clipboard grab. It shows a spinner immediately and only grabs focus
+        # once the first suggestion arrives, so the Cmd+C grab still lands in
+        # the source app.
+        popup = subprocess.Popen(
+            [sys.executable, "stream_popup.py"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+            cwd=workdir,
+        )
+
         log.info("Hotkey triggered — grabbing sentence")
         source_app = get_frontmost_app()
         log.debug("Source app: %s", source_app)
@@ -221,39 +235,23 @@ def handle_hotkey():
             log.warning("Nothing selected and current line is empty — aborting")
             return
 
-        # Launch the popup first (it shows a spinner instantly), then stream
-        # suggestions into it as they complete so the first one appears early.
-        workdir = __file__[:__file__.rfind("/")]
-        popup = subprocess.Popen(
-            [sys.executable, "stream_popup.py"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            text=True,
-            cwd=workdir,
-        )
         count = 0
-        try:
-            for suggestion in stream_reformulate(sentence):
-                count += 1
-                try:
-                    popup.stdin.write(suggestion + "\n")
-                    popup.stdin.flush()
-                except (BrokenPipeError, ValueError):
-                    break  # popup was closed early
+        for suggestion in stream_reformulate(sentence):
+            count += 1
             try:
-                popup.stdin.write("__DONE__\n")
+                popup.stdin.write(suggestion + "\n")
                 popup.stdin.flush()
-                popup.stdin.close()
             except (BrokenPipeError, ValueError):
-                pass
-        except Exception:
-            log.exception("Streaming generation failed")
-            popup.terminate()
-            return
+                break  # popup was closed early
+        try:
+            popup.stdin.write("__DONE__\n")
+            popup.stdin.flush()
+            popup.stdin.close()
+        except (BrokenPipeError, ValueError):
+            pass
 
         if count == 0:
             log.warning("No suggestions returned by the model")
-            popup.terminate()
             return
 
         log.info("Streamed %d suggestion(s) to popup", count)
@@ -269,6 +267,8 @@ def handle_hotkey():
     except Exception:
         log.exception("Unexpected error in handle_hotkey")
     finally:
+        if popup is not None and popup.poll() is None:
+            popup.terminate()
         time.sleep(0.2)
         clipboard_write(original_clipboard)
         _busy.release()

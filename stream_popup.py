@@ -44,6 +44,9 @@ _suggestions = []
 TABLE = None
 SPINNER = None
 LABEL = None
+APP = None
+WIN = None
+_activated = False
 
 
 def _emit_and_exit(text):
@@ -81,11 +84,14 @@ class TableView(NSTableView):
 class Helper(NSObject):
     # Drains the stdin queue on the main thread and updates the UI.
     def tick_(self, timer):
+        global _activated
         changed = False
+        done = False
         try:
             while True:
                 item = _q.get_nowait()
                 if item == DONE:
+                    done = True
                     if SPINNER is not None:
                         SPINNER.stopAnimation_(None)
                         SPINNER.setHidden_(True)
@@ -107,6 +113,13 @@ class Helper(NSObject):
                 TABLE.selectRowIndexes_byExtendingSelection_(
                     NSIndexSet.indexSetWithIndex_(0), False
                 )
+        # Grab focus only once results exist — during the spinner phase the
+        # source app must keep focus so the daemon's Cmd+C grab lands there.
+        if not _activated and (_suggestions or done):
+            _activated = True
+            APP.activateIgnoringOtherApps_(True)
+            WIN.makeKeyAndOrderFront_(None)
+            WIN.makeFirstResponder_(TABLE)
 
     # NSTableView data source
     def numberOfRowsInTableView_(self, tv):
@@ -161,8 +174,9 @@ def _position_away_from_cursor(win):
 
 
 def main():
-    global TABLE, SPINNER, LABEL
+    global TABLE, SPINNER, LABEL, APP, WIN
     app = NSApplication.sharedApplication()
+    APP = app
     app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
 
     win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
@@ -173,6 +187,7 @@ def main():
     )
     win.setTitle_("Reformulations")
     _position_away_from_cursor(win)
+    WIN = win
     content = win.contentView()
 
     SPINNER = NSProgressIndicator.alloc().initWithFrame_(NSMakeRect(16, 350, 18, 18))
@@ -229,9 +244,10 @@ def main():
         0.05, helper, "tick:", None, True
     )
 
-    win.makeKeyAndOrderFront_(None)
-    win.makeFirstResponder_(TABLE)
-    app.activateIgnoringOtherApps_(True)
+    # Show the window WITHOUT activating, so the app we're copying from keeps
+    # keyboard focus during the Cmd+C grab. tick_ activates us once the first
+    # suggestion arrives (grab is done by then) so the user can interact.
+    win.orderFrontRegardless()
     app.run()
 
 
