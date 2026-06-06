@@ -16,7 +16,7 @@ from mlx_lm import load, stream_generate
 from pynput import keyboard
 from tinyblabla.language import detect_language
 from tinyblabla.parser import stream_parse
-
+from history import load_recent, save_entry
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 HOTKEY = "<ctrl>+<shift>+<space>"
@@ -46,10 +46,22 @@ _busy = threading.Lock()
 def _build_prompt(sentence):
     lang = detect_language(sentence)
     log.debug("Detected language: %s", lang)
+    history = load_recent(3)
+    history_block = ""
+    if history:
+        examples = "\n".join(
+            f'- Original: "{e["original"]}"\n  You chose: "{e["chosen"]}"'
+            for e in history
+        )
+        history_block = (
+            "Here are reformulations you previously chose (use them to match this style):\n"
+            + examples + "\n\n"
+        )
     messages = [{
         "role": "user",
         "content": (
-            f"Correct all grammar, syntax, tense, and logic errors in the {lang} text below. "
+            history_block
+            + f"Correct all grammar, syntax, tense, and logic errors in the {lang} text below. "
             "Infer the most likely intended meaning and produce 5 natural, correct alternative "
             "versions. Each version must be a COMPLETE rewrite of the ENTIRE text. "
             f"Your response MUST be entirely in {lang}; do not translate. "
@@ -213,6 +225,7 @@ def handle_hotkey():
             # paste replaces the whole selection — multi-line included.
             activate_app(source_app)
             paste_text(chosen)
+            save_entry(sentence, chosen)
         else:
             log.info("Popup closed without selection")
     except Exception:
