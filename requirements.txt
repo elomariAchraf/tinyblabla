@@ -7,3 +7,4 @@ pynput
 sentencepiece
 protobuf
 mlx-lm
+pytest
