@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 import threading
-from mlx_lm import load, generate as mlx_generate
+from mlx_lm import load, stream_generate
 from pynput import keyboard
 
 HOTKEY = "<ctrl>+<shift>+<space>"
@@ -55,39 +55,23 @@ def detect_language(text):
     return "English"
 
 
-_NUM_RE = re.compile(r"^\s*(\d{1,2})[.)]\s+(.*)$")
+# Matches the start of a numbered list item ("1. ", "2) ", ...) at line start.
+_NUM_START = re.compile(r"(?m)^\s*\d{1,2}[.)]\s")
 
 
-def parse_suggestions(raw):
-    """Extract numbered reformulations from raw model output.
-
-    Joins wrapped continuation lines into a single suggestion and drops any
-    preamble or trailing commentary that falls outside the numbered list.
-    """
-    suggestions = []
-    current = None
-    for line in raw.splitlines():
-        m = _NUM_RE.match(line)
-        if m:
-            if current is not None:
-                suggestions.append(current.strip())
-            current = m.group(2)
-        elif current is not None:
-            if line.strip() == "":
-                # A blank line ends the current item; trailing commentary that
-                # follows it (and isn't numbered) is ignored.
-                suggestions.append(current.strip())
-                current = None
-            else:
-                # Continuation of a soft-wrapped suggestion line.
-                current += " " + line.strip()
-    if current is not None:
-        suggestions.append(current.strip())
-    return [s for s in suggestions if s][:5]
+def _clean_segment(seg):
+    """Strip the leading number from one numbered item and collapse it to a
+    single line, dropping any blank-line-separated trailing commentary."""
+    seg = _NUM_START.sub("", seg, count=1)
+    out = []
+    for ln in seg.splitlines():
+        if ln.strip() == "":
+            break  # a blank line ends the item; ignore commentary after it
+        out.append(ln.strip())
+    return " ".join(out).strip()
 
 
-def reformulate(sentence):
-    log.debug("Reformulating: %r", sentence)
+def _build_prompt(sentence):
     lang = detect_language(sentence)
     log.debug("Detected language: %s", lang)
     messages = [{
@@ -103,16 +87,54 @@ def reformulate(sentence):
             f"Text:\n{sentence}"
         ),
     }]
-    prompt = tokenizer.apply_chat_template(
+    return tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
+
+
+def stream_reformulate(sentence):
+    """Generate reformulations, yielding each completed numbered suggestion as
+    soon as the next one begins — so the first result surfaces early instead of
+    after the whole block finishes."""
+    log.debug("Reformulating: %r", sentence)
+    prompt = _build_prompt(sentence)
+    buf = ""
+    yielded = 0
+    first = None
     start = time.perf_counter()
-    raw = mlx_generate(model, tokenizer, prompt=prompt, max_tokens=600, verbose=False)
-    elapsed = time.perf_counter() - start
-    log.debug("Raw model output: %r", raw)
-    result = parse_suggestions(raw)
-    log.info("%d suggestion(s) generated in %.2fs", len(result), elapsed)
-    return result
+    for resp in stream_generate(model, tokenizer, prompt=prompt, max_tokens=600):
+        buf += resp.text
+        starts = [m.start() for m in _NUM_START.finditer(buf)]
+        # An item is complete once the next numbered item has begun.
+        while yielded + 1 < len(starts) and yielded < 5:
+            text = _clean_segment(buf[starts[yielded]:starts[yielded + 1]])
+            if text:
+                if first is None:
+                    first = time.perf_counter() - start
+                yield text
+            yielded += 1
+        if yielded >= 5:
+            break
+    # Flush the final in-progress item once generation ends.
+    if yielded < 5:
+        starts = [m.start() for m in _NUM_START.finditer(buf)]
+        if yielded < len(starts):
+            text = _clean_segment(buf[starts[yielded]:])
+            if text:
+                if first is None:
+                    first = time.perf_counter() - start
+                yield text
+                yielded += 1
+    total = time.perf_counter() - start
+    log.info(
+        "%d suggestion(s) streamed; first in %.2fs, all in %.2fs",
+        yielded, first if first is not None else total, total,
+    )
+
+
+def reformulate(sentence):
+    """Non-streaming convenience wrapper (collects the stream into a list)."""
+    return list(stream_reformulate(sentence))
 
 
 def clipboard_read():
@@ -199,33 +221,44 @@ def handle_hotkey():
             log.warning("Nothing selected and current line is empty — aborting")
             return
 
-        # Pop a loading spinner instantly so the user gets feedback while the
-        # model generates (which takes a couple of seconds).
+        # Launch the popup first (it shows a spinner instantly), then stream
+        # suggestions into it as they complete so the first one appears early.
         workdir = __file__[:__file__.rfind("/")]
-        loader = subprocess.Popen([sys.executable, "loader_worker.py"], cwd=workdir)
-        try:
-            suggestions = reformulate(sentence)
-        finally:
-            loader.terminate()
-            try:
-                loader.wait(timeout=2)
-            except Exception:
-                loader.kill()
-        if not suggestions:
-            log.warning("No suggestions returned by the model")
-            return
-
-        log.info("Opening popup with %d suggestion(s)", len(suggestions))
-        result = subprocess.run(
-            [sys.executable, "popup_worker.py", json.dumps(suggestions)],
-            capture_output=True,
+        popup = subprocess.Popen(
+            [sys.executable, "stream_popup.py"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
             text=True,
             cwd=workdir,
         )
-        if result.stderr.strip():
-            log.error("popup_worker stderr:\n%s", result.stderr.strip())
-        log.debug("popup_worker returncode: %d", result.returncode)
-        chosen = result.stdout.strip()
+        count = 0
+        try:
+            for suggestion in stream_reformulate(sentence):
+                count += 1
+                try:
+                    popup.stdin.write(suggestion + "\n")
+                    popup.stdin.flush()
+                except (BrokenPipeError, ValueError):
+                    break  # popup was closed early
+            try:
+                popup.stdin.write("__DONE__\n")
+                popup.stdin.flush()
+                popup.stdin.close()
+            except (BrokenPipeError, ValueError):
+                pass
+        except Exception:
+            log.exception("Streaming generation failed")
+            popup.terminate()
+            return
+
+        if count == 0:
+            log.warning("No suggestions returned by the model")
+            popup.terminate()
+            return
+
+        log.info("Streamed %d suggestion(s) to popup", count)
+        chosen = popup.stdout.readline().strip()
+        log.debug("popup chose: %r", chosen)
         if chosen:
             # The grabbed block is still selected in the source app, so a single
             # paste replaces the whole selection — multi-line included.
