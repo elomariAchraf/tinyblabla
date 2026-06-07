@@ -61,8 +61,8 @@ def reformulate(sentence, max_new_tokens=600):
     messages = [{
         "role": "user",
         "content": (
-            f"Rewrite the following {lang} text with better grammar and style, "
-            f"keeping its original meaning. "
+            f"Correct all grammar, syntax, tense, and logic errors in the following {lang} text. "
+            "Infer the most likely intended meaning and rewrite it correctly. "
             f"Your response MUST be entirely in {lang}; do not translate. "
             "Output ONLY 5 numbered reformulations (1. through 5.), each on its "
             "own single line. Do not add any preamble, explanation, or commentary.\n\n"
