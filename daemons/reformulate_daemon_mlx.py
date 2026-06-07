@@ -6,15 +6,18 @@ inference with strong multilingual support (English, French, and more).
 Requirements: pip install mlx-lm
 Model: ~3.8 GB download on first run (mlx-community/Mistral-7B-Instruct-v0.3-4bit)
 """
-import json
 import logging
-import re
+import pathlib
 import subprocess
 import sys
 import time
 import threading
 from mlx_lm import load, stream_generate
 from pynput import keyboard
+from tinyblabla.language import detect_language
+from tinyblabla.parser import stream_parse
+
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 HOTKEY = "<ctrl>+<shift>+<space>"
 MODEL_NAME = "mlx-community/Mistral-7B-Instruct-v0.3-4bit"
@@ -38,37 +41,6 @@ log.info("Model loaded. Hotkey active: Ctrl+Shift+Space")
 kb = keyboard.Controller()
 _busy = threading.Lock()
 
-_FRENCH_WORDS = frozenset([
-    "je", "tu", "il", "elle", "nous", "vous", "ils", "elles",
-    "le", "la", "les", "un", "une", "des", "du", "de", "et",
-    "est", "sont", "que", "qui", "dans", "sur", "avec", "pour",
-    "par", "mais", "ou", "donc", "ni", "car", "pas", "ne", "se",
-])
-
-def detect_language(text):
-    import re
-    if re.search(r'[çœàâùûîïêëôéèæ]', text.lower()):
-        return "French"
-    words = set(re.findall(r'\b\w+\b', text.lower()))
-    if len(words & _FRENCH_WORDS) >= 2:
-        return "French"
-    return "English"
-
-
-# Matches the start of a numbered list item ("1. ", "2) ", ...) at line start.
-_NUM_START = re.compile(r"(?m)^\s*\d{1,2}[.)]\s")
-
-
-def _clean_segment(seg):
-    """Strip the leading number from one numbered item and collapse it to a
-    single line, dropping any blank-line-separated trailing commentary."""
-    seg = _NUM_START.sub("", seg, count=1)
-    out = []
-    for ln in seg.splitlines():
-        if ln.strip() == "":
-            break  # a blank line ends the item; ignore commentary after it
-        out.append(ln.strip())
-    return " ".join(out).strip()
 
 
 def _build_prompt(sentence):
@@ -98,33 +70,14 @@ def stream_reformulate(sentence):
     after the whole block finishes."""
     log.debug("Reformulating: %r", sentence)
     prompt = _build_prompt(sentence)
-    buf = ""
-    yielded = 0
-    first = None
     start = time.perf_counter()
-    for resp in stream_generate(model, tokenizer, prompt=prompt, max_tokens=600):
-        buf += resp.text
-        starts = [m.start() for m in _NUM_START.finditer(buf)]
-        # An item is complete once the next numbered item has begun.
-        while yielded + 1 < len(starts) and yielded < 5:
-            text = _clean_segment(buf[starts[yielded]:starts[yielded + 1]])
-            if text:
-                if first is None:
-                    first = time.perf_counter() - start
-                yield text
-            yielded += 1
-        if yielded >= 5:
-            break
-    # Flush the final in-progress item once generation ends.
-    if yielded < 5:
-        starts = [m.start() for m in _NUM_START.finditer(buf)]
-        if yielded < len(starts):
-            text = _clean_segment(buf[starts[yielded]:])
-            if text:
-                if first is None:
-                    first = time.perf_counter() - start
-                yield text
-                yielded += 1
+    first = None
+    yielded = 0
+    for text in stream_parse(resp.text for resp in stream_generate(model, tokenizer, prompt=prompt, max_tokens=600)):
+        if first is None:
+            first = time.perf_counter() - start
+        yielded += 1
+        yield text
     total = time.perf_counter() - start
     log.info(
         "%d suggestion(s) streamed; first in %.2fs, all in %.2fs",
@@ -210,7 +163,6 @@ def handle_hotkey():
         log.warning("Already processing, hotkey ignored")
         return
     original_clipboard = clipboard_read()
-    workdir = __file__[:__file__.rfind("/")]
     popup = None
     try:
         # Launch the popup FIRST so its startup (~0.14s) overlaps the focus and
@@ -218,11 +170,11 @@ def handle_hotkey():
         # once the first suggestion arrives, so the Cmd+C grab still lands in
         # the source app.
         popup = subprocess.Popen(
-            [sys.executable, "stream_popup.py"],
+            [sys.executable, str(_ROOT / "ui" / "stream_popup.py")],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=True,
-            cwd=workdir,
+            cwd=str(_ROOT),
         )
 
         log.info("Hotkey triggered — grabbing sentence")

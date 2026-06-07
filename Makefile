@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: setup run run-mlx setup-mlx repl
+.PHONY: setup run run-mlx setup-mlx repl test
 
 setup:
 	bash setup.sh
@@ -16,3 +16,6 @@ run-mlx:
 
 repl:
 	bash repl.sh
+
+test:
+	venv/bin/pip install -q pytest && venv/bin/pytest tests/ -v

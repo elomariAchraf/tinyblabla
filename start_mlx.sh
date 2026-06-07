@@ -1,4 +1,4 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 source venv/bin/activate
-python reformulate_daemon_mlx.py
+PYTHONPATH=. python daemons/reformulate_daemon_mlx.py

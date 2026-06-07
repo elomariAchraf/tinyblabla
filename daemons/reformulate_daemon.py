@@ -1,6 +1,6 @@
 import json
 import logging
-import re
+import pathlib
 import subprocess
 import sys
 import time
@@ -8,6 +8,10 @@ import threading
 import torch
 from pynput import keyboard
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from tinyblabla.language import detect_language
+from tinyblabla.parser import parse_suggestions
+
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 HOTKEY = "<ctrl>+<shift>+<space>"
 MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.3"
@@ -47,52 +51,6 @@ log.info("Warmup done. Hotkey active: Ctrl+Shift+Space")
 kb = keyboard.Controller()
 _busy = threading.Lock()
 
-_FRENCH_WORDS = frozenset([
-    "je", "tu", "il", "elle", "nous", "vous", "ils", "elles",
-    "le", "la", "les", "un", "une", "des", "du", "de", "et",
-    "est", "sont", "que", "qui", "dans", "sur", "avec", "pour",
-    "par", "mais", "ou", "donc", "ni", "car", "pas", "ne", "se",
-])
-
-def detect_language(text):
-    import re
-    if re.search(r'[çœàâùûîïêëôéèæ]', text.lower()):
-        return "French"
-    words = set(re.findall(r'\b\w+\b', text.lower()))
-    if len(words & _FRENCH_WORDS) >= 2:
-        return "French"
-    return "English"
-
-
-_NUM_RE = re.compile(r"^\s*(\d{1,2})[.)]\s+(.*)$")
-
-
-def parse_suggestions(raw):
-    """Extract numbered reformulations from raw model output.
-
-    Joins wrapped continuation lines into a single suggestion and drops any
-    preamble or trailing commentary that falls outside the numbered list.
-    """
-    suggestions = []
-    current = None
-    for line in raw.splitlines():
-        m = _NUM_RE.match(line)
-        if m:
-            if current is not None:
-                suggestions.append(current.strip())
-            current = m.group(2)
-        elif current is not None:
-            if line.strip() == "":
-                # A blank line ends the current item; trailing commentary that
-                # follows it (and isn't numbered) is ignored.
-                suggestions.append(current.strip())
-                current = None
-            else:
-                # Continuation of a soft-wrapped suggestion line.
-                current += " " + line.strip()
-    if current is not None:
-        suggestions.append(current.strip())
-    return [s for s in suggestions if s][:5]
 
 
 @torch.inference_mode()
@@ -213,8 +171,10 @@ def handle_hotkey():
 
         # Pop a loading spinner instantly so the user gets feedback while the
         # model generates (which takes a couple of seconds).
-        workdir = __file__[:__file__.rfind("/")]
-        loader = subprocess.Popen([sys.executable, "loader_worker.py"], cwd=workdir)
+        loader = subprocess.Popen(
+            [sys.executable, str(_ROOT / "ui" / "loader_worker.py")],
+            cwd=str(_ROOT),
+        )
         try:
             suggestions = reformulate(sentence)
         finally:
@@ -229,10 +189,10 @@ def handle_hotkey():
 
         log.info("Opening popup with %d suggestion(s)", len(suggestions))
         result = subprocess.run(
-            [sys.executable, "popup_worker.py", json.dumps(suggestions)],
+            [sys.executable, str(_ROOT / "ui" / "popup_worker.py"), json.dumps(suggestions)],
             capture_output=True,
             text=True,
-            cwd=workdir,
+            cwd=str(_ROOT),
         )
         if result.stderr.strip():
             log.error("popup_worker stderr:\n%s", result.stderr.strip())
